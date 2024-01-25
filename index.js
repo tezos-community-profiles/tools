@@ -25,7 +25,7 @@ const cmd = process.argv[2]
       const profiles_tz = await collect_tzprofiles()
       const profiles_tezid = await collect_tezid_profiles()
       Object.assign(profiles, profiles_tezid, profiles_tz)
-      await writeFile('profiles.json', profiles)
+      await writeFile('profiles.json', JSON.stringify(profiles, null, 2))
       console.log(`Collected a total of ${Object.keys(profiles).length} profiles and wrote them to profiles.json`)
       break
   }
@@ -56,6 +56,7 @@ async function collect_tzprofiles_batch(offset) {
     let profile = null
     let claims = await claims_res.json()
     claims = claims?.data?.tzprofiles_by_pk?.valid_claims
+    if (!claims) continue
     claims.forEach(claim => {
       claim.forEach(details => {
         try {
@@ -66,6 +67,7 @@ async function collect_tzprofiles_batch(offset) {
             pic: det.credentialSubject.logo,
             bio: det.credentialSubject.description,
             web: det.credentialSubject.website,
+            from: 'tzprofiles'
           }
         } catch(e) {}
       })
@@ -81,7 +83,7 @@ async function collect_tzprofiles() {
   console.log('== TZProfiles ==')
   const tzprofile_contracts_count_res  = await fetch(`${TZKT_API}/v1/contracts/count?codeHash.eq=${TZPROFILES_CODEHASH}`)
   let total_num_contracts = await tzprofile_contracts_count_res.text()
-  if (total_num_contracts > 200) total_num_contracts = 200 // TODO: Remove
+//  if (total_num_contracts > 200) total_num_contracts = 200 // TODO: Remove
   console.log(`Found a total of ${total_num_contracts} tzprofile contracts. Scraping profiles...`)
   let offset = 0
   const profiles = {}
@@ -99,9 +101,10 @@ async function collect_tezid_profiles() {
   const identities_res = await fetch(`${TZKT_API}/v1/contracts/${TEZID_DATASTORE_CONTRACT}/bigmaps/identities/keys?limit=10000`)
   if (!identities_res.ok) throw new Error('Unable to get TEZID identities')
   const identities = await identities_res.json()
-  const addresses = identities.map(i => i.key)
+  let addresses = identities.map(i => i.key)
+  if (addresses.length > 100) addresses = addresses.slice(0,100) // TODO: Remove
   const profiles = {}
-  console.log(`Found a total of ${addresses.length} addresses on TEZID. Checking for profiles...`)
+//  console.log(`Found a total of ${addresses.length} addresses on TEZID. Checking for profiles...`)
   for (const address of addresses) {
     process.stdout.write('.')
     const profile_res = await fetch(`${TEZID_API}/${TEZOS_NETWORK}/profile/${address}`)
@@ -112,7 +115,8 @@ async function collect_tezid_profiles() {
       nic: profile.name,
       pic: profile.avatar,
       bio: profile.description,
-      web: ''
+      web: '',
+      from: 'tezid'
     }
   }
   console.log('')
