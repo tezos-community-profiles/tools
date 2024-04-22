@@ -1,6 +1,7 @@
 import { config } from 'tiny-env-config'
 
 export const TZKT_API = config('TZKT_API', '')
+export const PICS_DIR = config('PICS_DIR', 'pics')
 export const TEZID_API = config('TEZID_API', '')
 export const BATCH_SIZE = config('BATCH_SIZE', '10', parseInt)
 export const TEZOS_NETWORK = config('TEZOS_NETWORK', '')

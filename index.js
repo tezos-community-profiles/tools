@@ -1,8 +1,10 @@
 import fs from 'fs'
-import { writeFile } from 'fs/promises'
+import mime from 'mime'
+import { writeFile, readFile } from 'fs/promises'
 import fetch from 'node-fetch'
 import {
   TZKT_API,
+  PICS_DIR,
   TEZID_API,
   BATCH_SIZE,
   TEZOS_NETWORK,
@@ -10,6 +12,7 @@ import {
   TZPROFILES_GRAPHQL_API,
   TEZID_DATASTORE_CONTRACT
 } from './config.js'
+import { timeout } from './utils.js'
 
 if (process.argv.length < 3) {
   console.error('Too few arguments')
@@ -28,8 +31,52 @@ const cmd = process.argv[2]
       await writeFile('profiles.json', JSON.stringify(profiles, null, 2))
       console.log(`Collected a total of ${Object.keys(profiles).length} profiles and wrote them to profiles.json`)
       break
+    case 'fetch_pics':
+      const rprofiles = await readFile('./profiles.json').then(r => JSON.parse(r.toString()))
+      await fetch_pics(rprofiles)
+      break
   }
 })()
+
+async function fetch_pics(profiles) {
+  const addresses = Object.keys(profiles)
+  for (const address of addresses) {
+    if (profiles[address].pic.indexOf('http') === 0) {
+      try {
+        await fetchAndWriteFile(profiles[address].pic, `${PICS_DIR}/${address}`)
+        console.log('SUCCESS', profiles[address].pic)
+        // Upload to IPFS?
+        // Set on profile?
+      } catch(e) {
+        console.log('ERROR', profiles[address].pic)
+        // Set null on profile?
+      }
+    }
+  }
+}
+
+async function fetchAndWriteFile(url, outputPath) {
+  const response = await Promise.race([
+    fetch(url),
+    timeout(2000)
+  ])
+  if (!response.ok) throw new Error('Network response was not ok.');
+
+  const extension = mime.getExtension(response.headers.get('Content-Type')) || 'bin'
+  const fileStream = fs.createWriteStream(`${outputPath}.${extension}`);
+  response.body.pipe(fileStream);
+
+  response.body.on('error', (err) => {
+    throw err;
+  });
+
+  return new Promise((resolve, reject) => {
+    fileStream.on('finish', resolve);
+    fileStream.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
 
 async function collect_tzprofiles_batch(offset) {
   const tzprofile_contracts_res = await fetch(`${TZKT_API}/v1/contracts?codeHash.eq=${TZPROFILES_CODEHASH}&includeStorage=true&offset=${offset}&limit=${BATCH_SIZE}`)
