@@ -2,22 +2,33 @@ import fs from 'fs'
 import mime from 'mime'
 import { writeFile, readFile } from 'fs/promises'
 import fetch from 'node-fetch'
+import { importKey } from '@taquito/signer'
+import { char2Bytes } from '@taquito/utils'
+import { TezosToolkit, MichelsonMap } from '@taquito/taquito'
 import {
+  RPC,
+  WALLET,
   TZKT_API,
   PICS_DIR,
   TEZID_API,
   BATCH_SIZE,
+  TCP_CONTRACT,
   TEZOS_NETWORK,
   TZPROFILES_CODEHASH,
   TZPROFILES_GRAPHQL_API,
   TEZID_DATASTORE_CONTRACT
 } from './config.js'
-import { timeout } from './utils.js'
+import { timeout, sliceIntoChunks } from './utils.js'
 
 if (process.argv.length < 3) {
   console.error('Too few arguments')
 }
 const cmd = process.argv[2]
+
+const toolkit = new TezosToolkit(RPC)
+importKey(toolkit,
+  WALLET.privkey
+).catch((e) => console.error(e));
 
 ;
  
@@ -35,8 +46,35 @@ const cmd = process.argv[2]
       const rprofiles = await readFile('./profiles.json').then(r => JSON.parse(r.toString()))
       await fetch_pics(rprofiles)
       break
+    case 'init_profiles':
+      const iprofiles = await readFile('./profiles.json').then(r => JSON.parse(r.toString()))
+      await init_profiles(iprofiles)
+      break
   }
 })()
+
+async function init_profiles(profiles) {
+  let contract = await toolkit.contract.at(TCP_CONTRACT)
+//  let methods = storedata.parameterSchema.ExtractSignatures()
+//  return console.log(methods)
+//  return console.log(storedata.methods.set_item().getSignature())
+
+  const chunks = sliceIntoChunks(profiles, 150)
+  console.log(chunks.length)
+  for (const chunk of chunks) {
+    const batch = toolkit.batch()
+    chunk.forEach((entry) => {
+      const key = ''
+      const address = entry.address 
+      const bytes = char2Bytes('ipfs://QmbSGHty4HkjotUuVLUreEEY3PKbsuWnW9vKt1CtrZASkn') // TODO: Upload to IPFS 
+      batch.withContractCall(contract.methods.init_profile_data(key, bytes, address))
+    })
+    const op = await batch.send()
+    await op.confirmation(1)
+    console.log(op.hash) 
+  }
+
+}
 
 async function fetch_pics(profiles) {
   const addresses = Object.keys(profiles)
