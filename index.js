@@ -54,21 +54,26 @@ importKey(toolkit,
 })()
 
 async function init_profiles(profiles) {
+  return console.log(Object.keys(profiles).length)
   let contract = await toolkit.contract.at(TCP_CONTRACT)
 //  let methods = storedata.parameterSchema.ExtractSignatures()
 //  return console.log(methods)
 //  return console.log(storedata.methods.set_item().getSignature())
 
-  const chunks = sliceIntoChunks(profiles, 150)
+  const chunks = sliceIntoChunks(profiles, 100)
   console.log(chunks.length)
   for (const chunk of chunks) {
     const batch = toolkit.batch()
-    chunk.forEach((entry) => {
+    for (const entry of chunk) {
+      const { nic, pic, bio } = entry
+      const profile = { nic, pic, bio }
       const key = ''
       const address = entry.address 
-      const bytes = char2Bytes('ipfs://QmbSGHty4HkjotUuVLUreEEY3PKbsuWnW9vKt1CtrZASkn') // TODO: Upload to IPFS 
+//      const ipfs_uri = await ipfsDeployProfile(entry)
+      const bytes = char2Bytes(JSON.stringify(profile)) // <- Better to byte the entire payload?
+//      const bytes = char2Bytes('ipfs://QmbSGHty4HkjotUuVLUreEEY3PKbsuWnW9vKt1CtrZASkn') // TODO: Upload to IPFS 
       batch.withContractCall(contract.methods.init_profile_data(key, bytes, address))
-    })
+    }
     const op = await batch.send()
     await op.confirmation(1)
     console.log(op.hash) 
